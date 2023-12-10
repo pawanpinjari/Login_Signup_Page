@@ -1,0 +1,138 @@
+npm init -y
+npm install express mongoose body-parser jsonwebtoken bcrypt
+
+
+
+const express = require('express');
+const mongoose = require('mongoose');
+const bodyParser = require('body-parser');
+const bcrypt = require('bcrypt');
+const jwt = require('jsonwebtoken');
+
+const app = express();
+const PORT = 3001;
+
+// Connect to MongoDB
+mongoose.connect('mongodb://localhost:27017/login_signup_system', { useNewUrlParser: true, useUnifiedTopology: true });
+
+// Define User Schema
+const userSchema = new mongoose.Schema({
+  name: String,
+  email: String,
+  password: String,
+  role: String, // 'user', 'admin', 'client'
+});
+
+const User = mongoose.model('User', userSchema);
+
+app.use(bodyParser.json());
+
+// Signup endpoint
+app.post('/signup', async (req, res) => {
+  try {
+    const { name, email, password, role } = req.body;
+
+    // Hash the password
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    // Create a new user
+    const newUser = new User({ name, email, password: hashedPassword, role });
+    await newUser.save();
+
+    res.status(201).json({ message: 'User registered successfully' });
+  } catch (error) {
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
+// Login endpoint
+app.post('/login', async (req, res) => {
+  try {
+    const { email, password, role } = req.body;
+
+    // Find the user in the database
+    const user = await User.findOne({ email, role });
+
+    // Check if user exists and password is correct
+    if (user && await bcrypt.compare(password, user.password)) {
+      // Generate a JWT token
+      const token = jwt.sign({ userId: user._id, role: user.role }, 'secretKey', { expiresIn: '1h' });
+
+      res.status(200).json({ token });
+    } else {
+      res.status(401).json({ error: 'Invalid credentials' });
+    }
+  } catch (error) {
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
+app.listen(PORT, () => {
+  console.log(`Server is running on http://localhost:${PORT}`);
+});
+
+
+npx create-react-app login-signup-system
+cd login-signup-system
+npm install axios
+
+
+app.js
+
+import React, { useState } from 'react';
+import axios from 'axios';
+
+const App = () => {
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [role, setRole] = useState('user');
+  const [message, setMessage] = useState('');
+
+  const handleSignup = async () => {
+    try {
+      await axios.post('http://localhost:3001/signup', { name: 'John Doe', email, password, role });
+      setMessage('User registered successfully');
+    } catch (error) {
+      setMessage('Error registering user');
+    }
+  };
+
+  const handleLogin = async () => {
+    try {
+      const response = await axios.post('http://localhost:3001/login', { email, password, role });
+      const token = response.data.token;
+      setMessage(`Login successful. Token: ${token}`);
+    } catch (error) {
+      setMessage('Invalid credentials');
+    }
+  };
+
+  return (
+    <div>
+      <h1>Login and Signup System</h1>
+      <div>
+        <label>Email:</label>
+        <input type="email" onChange={(e) => setEmail(e.target.value)} />
+      </div>
+      <div>
+        <label>Password:</label>
+        <input type="password" onChange={(e) => setPassword(e.target.value)} />
+      </div>
+      <div>
+        <label>Role:</label>
+        <select onChange={(e) => setRole(e.target.value)}>
+          <option value="user">User</option>
+          <option value="admin">Admin</option>
+          <option value="client">Client</option>
+        </select>
+      </div>
+      <div>
+        <button onClick={handleSignup}>Signup</button>
+        <button onClick={handleLogin}>Login</button>
+      </div>
+      <p>{message}</p>
+    </div>
+  );
+};
+
+export default App;
